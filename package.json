@@ -1,7 +1,7 @@
 {
-  "name": "prettier-plugin-tailwindcss",
-  "version": "0.2.0",
-  "description": "A Prettier plugin for sorting Tailwind CSS classes.",
+  "name": "prettier-plugin-nativewind",
+  "version": "0.1.0",
+  "description": "A Prettier plugin for sorting NativeWind CSS classes.",
   "license": "MIT",
   "main": "dist/index.js",
   "files": [
@@ -9,10 +9,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/tailwindlabs/prettier-plugin-tailwindcss"
+    "url": "https://github.com/nderscore/prettier-plugin-nativewind"
   },
   "bugs": {
-    "url": "https://github.com/tailwindlabs/prettier-plugin-tailwindcss/issues"
+    "url": "https://github.com/nderscore/prettier-plugin-nativewind/issues"
   },
   "scripts": {
     "_pre": "rimraf dist && cpy node_modules/tailwindcss/lib/css dist/css",
