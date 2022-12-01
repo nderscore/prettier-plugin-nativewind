@@ -460,7 +460,7 @@ function transformJavaScript(ast, { env }) {
       if (!node.value) {
         return
       }
-      if (['class', 'className'].includes(node.name.name)) {
+      if (['class', 'className', 'tw'].includes(node.name.name)) {
         if (isStringLiteral(node.value)) {
           sortStringLiteral(node.value, { env })
         } else if (node.value.type === 'JSXExpressionContainer') {
@@ -474,6 +474,21 @@ function transformJavaScript(ast, { env }) {
         }
       }
     },
+    CallExpression(node) {
+      // find styled() calls
+      if (node.callee?.name === 'styled') {
+        // skip first argument, which is the component
+        (node.arguments ?? []).slice(1).forEach((arg) => {
+          visit(arg, (node) => {
+            if (isStringLiteral(node)) {
+              sortStringLiteral(node, { env })
+            } else if (node.type === 'TemplateLiteral') {
+              sortTemplateLiteral(node, { env })
+            }
+          })
+        })
+      }
+    }
   })
 }
 
