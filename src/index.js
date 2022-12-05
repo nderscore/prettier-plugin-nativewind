@@ -475,19 +475,23 @@ function transformJavaScript(ast, { env }) {
       }
     },
     CallExpression(node) {
-      // find styled() calls
-      if (node.callee?.name === 'styled') {
-        // skip first argument, which is the component
-        (node.arguments ?? []).slice(1).forEach((arg) => {
-          visit(arg, (node) => {
-            if (isStringLiteral(node)) {
-              sortStringLiteral(node, { env })
-            } else if (node.type === 'TemplateLiteral') {
-              sortTemplateLiteral(node, { env })
-            }
-          })
-        })
+      const calleeName = node.callee?.name
+      const isStyledCall = calleeName === 'styled'
+      const isVariantsCall = calleeName === 'variants'
+      if ((!isStyledCall && !isVariantsCall) || !node.arguments) {
+        return
       }
+      // for calls to styled(), skip the first argument, which is the component
+      const args = isStyledCall ? node.arguments.slice(1) : node.arguments
+      args.forEach((arg) => {
+        visit(arg, (node) => {
+          if (isStringLiteral(node)) {
+            sortStringLiteral(node, { env })
+          } else if (node.type === 'TemplateLiteral') {
+            sortTemplateLiteral(node, { env })
+          }
+        })
+      })
     }
   })
 }
