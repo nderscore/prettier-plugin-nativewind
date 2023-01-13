@@ -199,7 +199,19 @@ function createParser(parserFormat, transform) {
         contextMap.set(tailwindConfigPath, { context, hash })
       }
 
-      transform(ast, { env: { context, generateRules, parsers, options } })
+      const testTailwindProp = createCustomTest(options.tailwindCustomProps ?? ['class', 'className', 'tw'])
+      const testTailwindFunction = createCustomTest(options.tailwindCustomFunctions ?? ['styled', 'variants'])
+
+      transform(ast, {
+        env: {
+          context,
+          generateRules,
+          testTailwindProp,
+          testTailwindFunction,
+          parsers,
+          options
+        }
+      })
       return ast
     },
   }
@@ -469,7 +481,7 @@ function transformJavaScript(ast, { env }) {
       if (!node.value) {
         return
       }
-      if (['class', 'className', 'tw'].includes(node.name.name)) {
+      if (env.testTailwindProp(node.name.name)) {
         if (isStringLiteral(node.value)) {
           sortStringLiteral(node.value, { env })
         } else if (node.value.type === 'JSXExpressionContainer') {
@@ -484,15 +496,12 @@ function transformJavaScript(ast, { env }) {
       }
     },
     CallExpression(node) {
-      const calleeName = node.callee?.name
-      const isStyledCall = calleeName === 'styled'
-      const isVariantsCall = calleeName === 'variants'
-      if ((!isStyledCall && !isVariantsCall) || !node.arguments) {
+      const calleeName = node.callee?.name ?? ''
+      if (!node.arguments || !env.testTailwindFunction(calleeName)) {
         return
       }
-      // for calls to styled(), skip the first argument, which is the component
-      const args = isStyledCall ? node.arguments.slice(1) : node.arguments
-      args.forEach((arg) => {
+
+      node.arguments.forEach((arg) => {
         visit(arg, (node) => {
           if (isStringLiteral(node)) {
             sortStringLiteral(node, { env })
@@ -522,6 +531,40 @@ export const options = {
     category: 'Tailwind CSS',
     description: 'TODO',
   },
+  tailwindCustomProps: {
+    default: [
+      { since: '0.2.0', value: ['class', 'className', 'tw'] }
+    ],
+    type: 'string',
+    array: true,
+    category: 'Tailwind CSS',
+    description: 'List of React props to sort tailwind classes in',
+  },
+  tailwindCustomFunctions: {
+    default: [
+      { since: '0.2.0', value: ['styled', 'variants'] },
+    ],
+    type: 'string',
+    array: true,
+    category: 'Tailwind CSS',
+    description: 'List of function names to sort tailwind classes in',
+  }
+}
+
+function createCustomTest(values) {
+  const processedValues = values.map(
+    (v) => v.startsWith('^') ? new RegExp(v) : v
+  )
+  const hasRegex = processedValues.some((v) => v instanceof RegExp)
+  if (!hasRegex) {
+    return (value) => processedValues.includes(value)
+  }
+  return (value) => processedValues.some((v) => {
+    if (v instanceof RegExp) {
+      return v.test(value)
+    }
+    return v === value
+  })
 }
 
 export const printers = {
