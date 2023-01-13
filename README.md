@@ -1,8 +1,8 @@
 # prettier-plugin-nativewind
 
 A fork of 
-[`prettier-plugin-tailwindcss`](https://github.com/tailwindlabs/prettier-plugin-tailwindcss)
-with support for [NativeWind](https://www.nativewind.dev/).
+[`prettier-plugin-tailwindcss`](https://www.npmjs.com/package/prettier-plugin-tailwindcss)
+with support for [NativeWind](https://www.nativewind.dev) and other use custom use cases.
 
 ```bash
 npm install -D prettier-plugin-nativewind
@@ -22,13 +22,66 @@ Support for automatically sorting tailwind classes found in strings inside of:
 
 * Class variants defined using `variants()`
 
+* Or, customize which props and function calls to look for tailwind classes in
+
 ## Usage
 
 Please refer to the 
 [original package documentation](https://github.com/tailwindlabs/prettier-plugin-tailwindcss/#readme)
-for usage instructions.
+for basic usage instructions.
+
+### Customizing props
+
+This fork adds two additional prettier configuration options, which allow you
+to customize which props and function calls to search for tailwind classes in.
+
+* `tailwindCustomProps`
+* `tailwindCustomFunctions`
+
+**Customize props:**
+
+Sort custom props which get passed as classnames to child elements:
+
+```js
+// prettier.config.js
+module.exports = {
+    tailwindCustomProps: ['className', 'containerClassName'] 
+};
+```
+
+**Customize functions:**
+
+Sort inside calls to
+[`cva()`](https://www.npmjs.com/package/class-variance-authority) 
+instead of `styled()`:
+
+```js
+// prettier.config.js
+module.exports = {
+    tailwindCustomFunctions: ['cva'] 
+};
+```
+
+**Regular expressions**
+
+You can also use regular expressions by starting a string with `^`.
+
+Sort any prop which ends in `ClassName`:
+
+```js
+// prettier.config.js
+module.exports = {
+    tailwindCustomProps: ['className', '^[a-z]+ClassName$'] 
+};
+```
+
 
 ## Changelog
+
+### v0.2.0
+
+* Synchronize with upstream `prettier-plugin-tailwindcss@0.2.1`
+* Add support for customizing which props and functions to search
 
 ### v0.1.1
 
