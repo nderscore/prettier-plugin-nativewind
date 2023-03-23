@@ -37,6 +37,7 @@ to customize which props and function calls to search for tailwind classes in.
 
 * `tailwindCustomProps`
 * `tailwindCustomFunctions`
+* `tailwindCustomTaggedTemplates`
 
 **Customize props:**
 
@@ -62,7 +63,17 @@ module.exports = {
 };
 ```
 
-**Regular expressions**
+**Tagged template literals:**
+
+```js
+// prettier.config.js
+module.exports = {
+  // Sort template strings found in tagged template literal calls named tw``
+  tailwindCustomTaggedTemplates: ['tw']
+};
+```
+
+**Regular expressions:**
 
 You can also use regular expressions by starting a string with `^`.
 
@@ -75,8 +86,12 @@ module.exports = {
 };
 ```
 
-
 ## Changelog
+
+### v0.2.1
+
+* Synchronize with upstream `prettier-plugin-tailwindcss@0.2.5`
+* Add support for tagged template literals
 
 ### v0.2.0
 
