@@ -25,9 +25,9 @@ function format(str, options = {}) {
     .trim()
 }
 
-function formatFixture(name) {
+function formatFixture(name, extension = 'html') {
   let binPath = path.resolve(__dirname, '../node_modules/.bin/prettier')
-  let filePath = path.resolve(__dirname, `fixtures/${name}/index.html`)
+  let filePath = path.resolve(__dirname, `fixtures/${name}/index.${extension}`)
   return execSync(
     `${binPath} ${filePath} --plugin-search-dir ${__dirname} --plugin ${path.resolve(
       __dirname,
@@ -323,5 +323,40 @@ test('explicit config path', () => {
 test('plugins', () => {
   expect(formatFixture('plugins')).toEqual(
     '<div class="uppercase line-clamp-1 sm:line-clamp-2"></div>'
+  )
+})
+
+test('jsx customizations', () => {
+  expect(formatFixture('custom-jsx', 'jsx').trim()).toEqual(
+    `const A = (props) => {
+  return <div className={props.sortMe} />;
+};
+
+const B = () => {
+  return (
+    <A
+      sortMe="p-2 sm:p-1"
+      sortedPatternClassName="p-2 sm:p-1"
+      dontSort="sm:p-1 p-2"
+    />
+  );
+};`
+  )
+})
+
+test('js customizations', () => {
+  expect(formatFixture('custom-js', 'js').trim()).toEqual(
+    `const sortMeFn = () => {};
+const dontSortFn = () => {};
+const a = sortMeFn("p-2 sm:p-1");
+const b = sortMeFn({
+  foo: "p-2 sm:p-1",
+});
+
+const c = dontSortFn("sm:p-1 p-2");
+const sortMeTemplate = () => {};
+const dontSortMeTemplate = () => {};
+const d = sortMeTemplate\`p-2 sm:p-1\`;
+const e = dontSortMeTemplate\`sm:p-1 p-2\`;`
   )
 })
