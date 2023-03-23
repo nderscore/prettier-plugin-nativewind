@@ -352,7 +352,12 @@ function transformGlimmer(ast, { env }) {
         return
       }
 
-      node.value = sortClasses(node.value, { env })
+      const isConcat = parent.type === 'SubExpression' && parent.path.original === 'concat';
+
+      node.value = sortClasses(node.value, {
+        env,
+        ignoreLast: isConcat && !/[^\S\r\n]$/.test(node.value),
+      })
     },
   })
 }
@@ -360,62 +365,80 @@ function transformGlimmer(ast, { env }) {
 function transformLiquid(ast, { env }) {
   /** @param {{name: string | {type: string, value: string}[]}} node */
   function isClassAttr(node) {
-    if (Array.isArray(node.name)) {
-      return node.name.every((n) => n.type === 'TextNode' && n.value === 'class');
-    }
+    return Array.isArray(node.name)
+      ? node.name.every((n) => n.type === 'TextNode' && n.value === 'class')
+      : node.name === 'class'
+  }
 
-    return node.name === 'class'
+  /** @type {{type: string, source: string}[]} */
+  let sources = []
+
+  /** @type {{pos: {start: number, end: number}, value: string}[]} */
+  let changes = []
+
+  function sortAttribute(attr) {
+    visit(attr.value, {
+      TextNode(node) {
+        node.value = sortClasses(node.value, { env });
+        changes.push({
+          pos: node.position,
+          value: node.value,
+        })
+      },
+
+      String(node) {
+        node.value = sortClasses(node.value, { env });
+        changes.push({
+          pos: {
+            // String position includes the quotes even if the value doesn't
+            // Hence the +1 and -1 when slicing
+            start: node.position.start+1,
+            end: node.position.end-1,
+          },
+          value: node.value,
+        })
+      },
+    })
   }
 
   visit(ast, {
-    AttrSingleQuoted(node, _parent, _key, _index, meta) {
-      if (!isClassAttr(node)) {
-        return;
-      }
-
-      meta.sortTextNodes = true;
-      meta.sourceNode = node;
+    LiquidTag(node) {
+      sources.push(node)
     },
 
-    AttrDoubleQuoted(node, _parent, _key, _index, meta) {
-      if (!isClassAttr(node)) {
-        return;
-      }
-
-      meta.sortTextNodes = true;
-
-      // With Liquid Script it uses the "source" of certain nodes as the "source of truth"
-      // We must modify that node's source to get the desired output
-      // Even if we modify the AST it will be ignored
-      meta.sourceNode = node;
+    HtmlElement(node) {
+      sources.push(node)
     },
 
-    TextNode(node, _parent, _key, _index, meta) {
-      if (!meta.sortTextNodes) {
-        return;
+    AttrSingleQuoted(node) {
+      if (isClassAttr(node)) {
+        sources.push(node)
+        sortAttribute(node)
       }
-
-      node.value = sortClasses(node.value, { env });
-
-      // This feels hacky but it's necessary
-      node.source = node.source.slice(0, node.position.start) + node.value + node.source.slice(node.position.end);
-      meta.sourceNode.source = node.source;
     },
 
-    String(node, _parent, _key, _index, meta) {
-      if (!meta.sortTextNodes) {
-        return;
+    AttrDoubleQuoted(node) {
+      if (isClassAttr(node)) {
+        sources.push(node)
+        sortAttribute(node)
       }
-
-      node.value = sortClasses(node.value, { env });
-
-      // This feels hacky but it's necessary
-      // String position includes the quotes even if the value doesn't
-      // Hence the +1 and -1 when slicing
-      node.source = node.source.slice(0, node.position.start+1) + node.value + node.source.slice(node.position.end-1);
-      meta.sourceNode.source = node.source;
     },
   });
+
+  // Sort so all changes occur in order
+  changes = changes.sort((a, b) => {
+    return a.start - b.start
+        || a.end - b.end
+  })
+
+  for (let change of changes) {
+    for (let node of sources) {
+      node.source =
+        node.source.slice(0, change.pos.start) +
+        change.value +
+        node.source.slice(change.pos.end)
+    }
+  }
 }
 
 function sortStringLiteral(node, { env }) {
@@ -630,7 +653,7 @@ export const parsers = {
 }
 
 function transformAstro(ast, { env, changes }) {
-  if (ast.type === "element") {
+  if (ast.type === "element" || ast.type === "custom-element" || ast.type === "component") {
     for (let attr of ast.attributes ?? []) {
       if (attr.name === "class" && attr.type === "attribute" && attr.kind === "quoted") {
         attr.value = sortClasses(attr.value, {
@@ -808,6 +831,14 @@ function transformSvelte(ast, { env, changes }) {
       transformSvelte(child, { env, changes })
     }
   }
+
+  if (ast.type === "AwaitBlock") {
+    let nodes = [ast.pending, ast.then, ast.catch];
+
+    for (let child of nodes) {
+      transformSvelte(child, { env, changes });
+    }
+  }
 }
 
 // https://lihautan.com/manipulating-ast-with-javascript/
@@ -906,6 +937,7 @@ function getCompatibleParser(parserFormat, options) {
 
   // Now load parsers from plugins
   let compatiblePlugins = [
+    '@ianvs/prettier-plugin-sort-imports',
     '@trivago/prettier-plugin-sort-imports',
     'prettier-plugin-organize-imports',
     '@prettier/plugin-php',

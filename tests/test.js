@@ -159,6 +159,19 @@ let glimmer = [
   t`<div class></div>`,
   t`<div class=''></div>`,
   t`{{link 'Some page' href=person.url class='${no}'}}`,
+  t`<div class='{{if @isTrue (concat "border-l-4 border-" @borderColor)}}'></div>`,
+  [
+    `<div class='{{if @isTrue (concat "border-opacity-30 border-l-4 border-" @borderColor)}}'></div>`,
+    `<div class='{{if @isTrue (concat "border-l-4 border-opacity-30 border-" @borderColor)}}'></div>`,
+  ],
+  [
+    `<div class='{{if @isTrue (concat "border-l-4 border " @borderColor)}}'></div>`,
+    `<div class='{{if @isTrue (concat "border border-l-4 " @borderColor)}}'></div>`,
+  ],
+  [
+    `<div class='{{if @isTrue (nope "border-l-4 border-" @borderColor)}}'></div>`,
+    `<div class='{{if @isTrue (nope "border- border-l-4" @borderColor)}}'></div>`,
+  ],
 ]
 
 let tests = {
@@ -225,6 +238,14 @@ let tests = {
       `<div class="p-0 sm:p-0 {someVar}sm:block flex md:inline" />`,
     ],
     ['<div class={`sm:p-0\np-0`} />', '<div\n  class={`p-0\nsm:p-0`}\n/>'],
+    [
+      `{#await promise()} <div class="sm:p-0 p-0"></div> {:then} <div class="sm:p-0 p-0"></div> {/await}`,
+      `{#await promise()} <div class="p-0 sm:p-0" /> {:then} <div class="p-0 sm:p-0" /> {/await}`,
+    ],
+    [
+      `{#await promise() then} <div class="sm:p-0 p-0"></div> {/await}`,
+      `{#await promise() then} <div class="p-0 sm:p-0" /> {/await}`,
+    ],
   ],
   astro: [
     ...html,
@@ -244,6 +265,16 @@ let tests = {
   }
 </style>`,
     ],
+    t`---
+import Layout from '../layouts/Layout.astro'
+import Custom from '../components/Custom.astro'
+---
+
+<Layout>
+  <main class="${yes}"></main>
+  <my-element class="${yes}"></my-element>
+  <Custom class="${yes}" />
+</Layout>`,
   ],
 };
 

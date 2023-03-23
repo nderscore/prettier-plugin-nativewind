@@ -52,6 +52,37 @@ let tests = [
   },
   {
     plugins: [
+      '@ianvs/prettier-plugin-sort-imports',
+    ],
+    options: {
+      importOrder: ["^@tailwindcss/(.*)$", "^@babel/(.*)$", "^[./]"],
+      importOrderSortSpecifiers: true,
+    },
+    tests: {
+      babel: [
+        [
+          `import './i-haz-side-effects'\nimport i3 from './three'\nimport i2 from '@two/file'\nimport i1 from '@one/file'`,
+          `import './i-haz-side-effects'\nimport i1 from '@one/file'\nimport i2 from '@two/file'\nimport i3 from './three'`,
+        ],
+      ],
+      typescript: [
+        [
+          `import './i-haz-side-effects'\nimport i3 from './three'\nimport i2 from '@two/file'\nimport i1 from '@one/file'`,
+          `import './i-haz-side-effects'\nimport i1 from '@one/file'\nimport i2 from '@two/file'\nimport i3 from './three'`,
+        ],
+      ],
+
+      // This plugin does not support babel-ts
+      'babel-ts': [
+        [
+          `import './three'\nimport '@two/file'\nimport '@one/file'`,
+          `import './three'\nimport '@two/file'\nimport '@one/file'`,
+        ],
+      ],
+    }
+  },
+  {
+    plugins: [
       'prettier-plugin-organize-imports',
     ],
     options: {},
@@ -221,6 +252,18 @@ let tests = [
         [
           `{% if state == true %}\n  <a class="{{ "sm:p-0 p-4" | escape }}" href="https://www.example.com">Example</a>\n{% endif %}`,
           `{% if state == true %}\n  <a class='{{ "p-4 sm:p-0" | escape }}' href='https://www.example.com'>Example</a>\n{% endif %}`,
+        ],
+        [
+          `{%- capture class_ordering -%}<div class="sm:p-0 p-4"></div>{%- endcapture -%}`,
+          `{%- capture class_ordering -%}<div class="p-4 sm:p-0"></div>{%- endcapture -%}`,
+        ],
+        [
+          `{%- capture class_ordering -%}<div class="foo1 sm:p-0 p-4"></div><div class="foo2 sm:p-0 p-4"></div>{%- endcapture -%}`,
+          `{%- capture class_ordering -%}<div class="foo1 p-4 sm:p-0"></div><div class="foo2 p-4 sm:p-0"></div>{%- endcapture -%}`,
+        ],
+        [
+          `{%- capture class_ordering -%}<div class="foo1 sm:p-0 p-4"><div class="foo2 sm:p-0 p-4"></div></div>{%- endcapture -%}`,
+          `{%- capture class_ordering -%}<div class="foo1 p-4 sm:p-0"><div class="foo2 p-4 sm:p-0"></div></div>{%- endcapture -%}`,
         ],
       ],
     }
