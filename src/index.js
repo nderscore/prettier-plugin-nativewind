@@ -199,15 +199,17 @@ function createParser(parserFormat, transform) {
         contextMap.set(tailwindConfigPath, { context, hash })
       }
 
-      const testTailwindProp = createCustomTest(options.tailwindCustomProps ?? ['class', 'className', 'tw'])
-      const testTailwindFunction = createCustomTest(options.tailwindCustomFunctions ?? ['styled', 'variants'])
+      let customizations = {
+        checkJSXPropName: createNameChecker(options.tailwindCustomProps ?? ['class', 'className']),
+        checkFunctionCallName: createNameChecker(options.tailwindCustomFunctions ?? ['styled', 'variants']),
+        checkTaggedTemplateName: createNameChecker(options.tailwindCustomTaggedTemplates),
+      }
 
       transform(ast, {
         env: {
           context,
+          customizations,
           generateRules,
-          testTailwindProp,
-          testTailwindFunction,
           parsers,
           options
         }
@@ -499,41 +501,53 @@ function sortTemplateLiteral(node, { env }) {
 }
 
 function transformJavaScript(ast, { env }) {
+  const { checkJSXPropName, checkFunctionCallName, checkTaggedTemplateName } = env.customizations
+
   visit(ast, {
-    JSXAttribute(node) {
-      if (!node.value) {
-        return
-      }
-      if (env.testTailwindProp(node.name.name)) {
-        if (isStringLiteral(node.value)) {
-          sortStringLiteral(node.value, { env })
-        } else if (node.value.type === 'JSXExpressionContainer') {
-          visit(node.value, (node, parent, key) => {
+    ...(checkJSXPropName && {
+      JSXAttribute(node) {
+        if (!node.value) {
+          return
+        }
+        if (checkJSXPropName(node.name.name)) {
+          if (isStringLiteral(node.value)) {
+            sortStringLiteral(node.value, { env })
+          } else if (node.value.type === 'JSXExpressionContainer') {
+            visit(node.value, (node, parent, key) => {
+              if (isStringLiteral(node)) {
+                sortStringLiteral(node, { env })
+              } else if (node.type === 'TemplateLiteral') {
+                sortTemplateLiteral(node, { env })
+              }
+            })
+          }
+        }
+      },
+    }),
+    ...(checkFunctionCallName && {
+      CallExpression(node) {
+        const calleeName = node.callee?.name ?? ''
+        if (!node.arguments?.length || !checkFunctionCallName(calleeName)) {
+          return
+        }
+        node.arguments.forEach((arg) => {
+          visit(arg, (node) => {
             if (isStringLiteral(node)) {
               sortStringLiteral(node, { env })
             } else if (node.type === 'TemplateLiteral') {
               sortTemplateLiteral(node, { env })
             }
           })
-        }
-      }
-    },
-    CallExpression(node) {
-      const calleeName = node.callee?.name ?? ''
-      if (!node.arguments || !env.testTailwindFunction(calleeName)) {
-        return
-      }
-
-      node.arguments.forEach((arg) => {
-        visit(arg, (node) => {
-          if (isStringLiteral(node)) {
-            sortStringLiteral(node, { env })
-          } else if (node.type === 'TemplateLiteral') {
-            sortTemplateLiteral(node, { env })
-          }
         })
-      })
-    }
+      },
+    }),
+    ...(checkTaggedTemplateName && {
+      TaggedTemplateExpression(node) {
+        if (node.tag.type === 'Identifier' && checkTaggedTemplateName(node.tag.name)) {
+          sortTemplateLiteral(node.quasi, { env })
+        }
+      },
+    }),
   })
 }
 
@@ -561,7 +575,7 @@ export const options = {
     type: 'string',
     array: true,
     category: 'Tailwind CSS',
-    description: 'List of React props to sort tailwind classes in',
+    description: 'List of React props to sort Tailwind classes in',
   },
   tailwindCustomFunctions: {
     default: [
@@ -570,11 +584,21 @@ export const options = {
     type: 'string',
     array: true,
     category: 'Tailwind CSS',
-    description: 'List of function names to sort tailwind classes in',
-  }
+    description: 'List of function names to sort Tailwind classes in',
+  },
+  tailwindCustomTaggedTemplates: {
+    default: [{ since: '0.2.1', value: [] }],
+    type: 'string',
+    array: true,
+    category: 'Tailwind CSS',
+    description: 'List of tagged template function names to sort Tailwind classes in',
+  },
 }
 
-function createCustomTest(values) {
+function createNameChecker(values) {
+  if (!values?.length) {
+    return false
+  }
   const processedValues = values.map(
     (v) => v.startsWith('^') ? new RegExp(v) : v
   )
