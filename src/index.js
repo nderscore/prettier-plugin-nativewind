@@ -11,15 +11,16 @@ import prettierParserTypescript from 'prettier/parser-typescript'
 import { createContext as createContextFallback } from 'tailwindcss/lib/lib/setupContextUtils'
 import { generateRules as generateRulesFallback } from 'tailwindcss/lib/lib/generateRules'
 import resolveConfigFallback from 'tailwindcss/resolveConfig'
+import loadConfigFallback from 'tailwindcss/loadConfig'
 import * as recast from 'recast'
 import * as astTypes from 'ast-types'
 import * as path from 'path'
-import requireFrom from 'import-from'
-import requireFresh from 'import-fresh'
 import objectHash from 'object-hash'
 import lineColumn from 'line-column'
 import jsesc from 'jsesc'
 import escalade from 'escalade/sync'
+import clearModule from 'clear-module'
+import resolveFrom from 'resolve-from'
 
 let base = getBasePlugins()
 
@@ -148,20 +149,38 @@ function createParser(parserFormat, transform) {
       let resolveConfig = resolveConfigFallback
       let createContext = createContextFallback
       let generateRules = generateRulesFallback
+      let loadConfig = loadConfigFallback
 
       let baseDir
       let prettierConfigPath = prettier.resolveConfigFile.sync(options.filepath)
 
       if (options.tailwindConfig) {
         baseDir = prettierConfigPath ? path.dirname(prettierConfigPath) : process.cwd()
-        tailwindConfigPath = path.resolve(baseDir, options.tailwindConfig)
-        tailwindConfig = requireFresh(tailwindConfigPath)
       } else {
         baseDir = prettierConfigPath
           ? path.dirname(prettierConfigPath)
           : options.filepath
           ? path.dirname(options.filepath)
           : process.cwd()
+      }
+
+      try {
+        let pkgDir = path.dirname(resolveFrom(baseDir, 'tailwindcss/package.json'))
+
+        resolveConfig = require(path.join(pkgDir, 'resolveConfig'))
+        createContext = require(path.join(pkgDir, 'lib/lib/setupContextUtils')).createContext
+        generateRules = require(path.join(pkgDir, 'lib/lib/generateRules')).generateRules
+
+        // Prior to `tailwindcss@3.3.0` this won't exist so we load it last
+        loadConfig = require(path.join(pkgDir, 'loadConfig'))
+      } catch {}
+
+      if (options.tailwindConfig) {
+        tailwindConfigPath = path.resolve(baseDir, options.tailwindConfig)
+        clearModule(tailwindConfigPath)
+        const loadedConfig = loadConfig(tailwindConfigPath)
+        tailwindConfig = loadedConfig.default ?? loadedConfig
+      } else {
         let configPath
         try {
           configPath = escalade(baseDir, (_dir, names) => {
@@ -171,19 +190,21 @@ function createParser(parserFormat, transform) {
             if (names.includes('tailwind.config.cjs')) {
               return 'tailwind.config.cjs'
             }
+            if (names.includes('tailwind.config.mjs')) {
+              return 'tailwind.config.mjs'
+            }
+            if (names.includes('tailwind.config.ts')) {
+              return 'tailwind.config.ts'
+            }
           })
         } catch {}
         if (configPath) {
           tailwindConfigPath = configPath
-          tailwindConfig = requireFresh(configPath)
+          clearModule(tailwindConfigPath)
+          const loadedConfig = loadConfig(tailwindConfigPath)
+          tailwindConfig = loadedConfig.default ?? loadedConfig
         }
       }
-
-      try {
-        resolveConfig = requireFrom(baseDir, 'tailwindcss/resolveConfig')
-        createContext = requireFrom(baseDir, 'tailwindcss/lib/lib/setupContextUtils').createContext
-        generateRules = requireFrom(baseDir, 'tailwindcss/lib/lib/generateRules').generateRules
-      } catch {}
 
       // suppress "empty content" warning
       tailwindConfig.content = ['no-op']
@@ -372,75 +393,55 @@ function transformLiquid(ast, { env }) {
       : node.name === 'class'
   }
 
-  /** @type {{type: string, source: string}[]} */
-  let sources = []
-
-  /** @type {{pos: {start: number, end: number}, value: string}[]} */
-  let changes = []
-
-  function sortAttribute(attr) {
+  function sortAttribute(attr, path) {
     visit(attr.value, {
       TextNode(node) {
         node.value = sortClasses(node.value, { env });
-        changes.push({
-          pos: node.position,
-          value: node.value,
-        })
+
+        let source = node.source.slice(0, node.position.start) + node.value + node.source.slice(node.position.end)
+        path.forEach(node => (node.source = source))
       },
 
       String(node) {
         node.value = sortClasses(node.value, { env });
-        changes.push({
-          pos: {
-            // String position includes the quotes even if the value doesn't
-            // Hence the +1 and -1 when slicing
-            start: node.position.start+1,
-            end: node.position.end-1,
-          },
-          value: node.value,
-        })
+
+        // String position includes the quotes even if the value doesn't
+        // Hence the +1 and -1 when slicing
+        let source = node.source.slice(0, node.position.start+1) + node.value + node.source.slice(node.position.end-1)
+        path.forEach(node => (node.source = source))
       },
     })
   }
 
   visit(ast, {
-    LiquidTag(node) {
-      sources.push(node)
+    LiquidTag(node, _parent, _key, _index, meta) {
+      meta.path = [...meta.path ?? [], node];
     },
 
-    HtmlElement(node) {
-      sources.push(node)
+    HtmlElement(node, _parent, _key, _index, meta) {
+      meta.path = [...meta.path ?? [], node];
     },
 
-    AttrSingleQuoted(node) {
-      if (isClassAttr(node)) {
-        sources.push(node)
-        sortAttribute(node)
+    AttrSingleQuoted(node, _parent, _key, _index, meta) {
+      if (!isClassAttr(node)) {
+        return;
       }
+
+      meta.path = [...meta.path ?? [], node];
+
+      sortAttribute(node, meta.path)
     },
 
-    AttrDoubleQuoted(node) {
-      if (isClassAttr(node)) {
-        sources.push(node)
-        sortAttribute(node)
+    AttrDoubleQuoted(node, _parent, _key, _index, meta) {
+      if (!isClassAttr(node)) {
+        return;
       }
+
+      meta.path = [...meta.path ?? [], node];
+
+      sortAttribute(node, meta.path)
     },
   });
-
-  // Sort so all changes occur in order
-  changes = changes.sort((a, b) => {
-    return a.start - b.start
-        || a.end - b.end
-  })
-
-  for (let change of changes) {
-    for (let node of sources) {
-      node.source =
-        node.source.slice(0, change.pos.start) +
-        change.value +
-        node.source.slice(change.pos.end)
-    }
-  }
 }
 
 function sortStringLiteral(node, { env }) {
