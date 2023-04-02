@@ -88,6 +88,10 @@ module.exports = {
 
 ## Changelog
 
+### v0.2.2
+
+* Synchronize with upstream `prettier-plugin-tailwindcss@0.2.6`
+
 ### v0.2.1
 
 * Synchronize with upstream `prettier-plugin-tailwindcss@0.2.5`
