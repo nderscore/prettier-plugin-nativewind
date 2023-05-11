@@ -1,3 +1,14 @@
+# Deprecation notice
+
+## ⚠️ This package is no longer actively maintained ⚠️
+
+[`prettier-plugin-tailwindcss`](https://www.npmjs.com/package/prettier-plugin-tailwindcss)
+now supports sorting Tailwind classes in custom locations, making this fork obsolete.
+
+---
+
+---
+
 # prettier-plugin-nativewind
 
 A fork of 
@@ -87,6 +98,11 @@ module.exports = {
 ```
 
 ## Changelog
+
+### v0.2.3
+
+* Add deprecation to readme
+* Add postinstall warning message
 
 ### v0.2.2
 

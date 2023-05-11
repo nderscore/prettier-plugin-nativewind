@@ -1,11 +1,12 @@
 {
   "name": "prettier-plugin-nativewind",
-  "version": "0.2.2",
-  "description": "A Prettier plugin for sorting NativeWind CSS classes.",
+  "version": "0.2.3",
+  "description": "(deprecated) A Prettier plugin for sorting NativeWind CSS classes.",
   "license": "MIT",
   "main": "dist/index.js",
   "files": [
-    "dist"
+    "dist",
+    "postinstall.js"
   ],
   "repository": {
     "type": "git",
@@ -17,6 +18,7 @@
   "scripts": {
     "_pre": "rimraf dist && cpy node_modules/tailwindcss/lib/css dist/css",
     "_esbuild": "node build.js",
+    "postinstall": "node postinstall.js",
     "prebuild": "npm run _pre",
     "build": "npm run _esbuild -- --minify",
     "predev": "npm run _pre",
